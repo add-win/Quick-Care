@@ -1,4 +1,4 @@
-# 🏥 CareOptimize — AI Caregiver Workload Optimization Engine
+# 🏥 QCare — AI Caregiver Workload Optimization Engine
 
 > Full-stack hackathon project | FastAPI backend + React frontend | 40 patients · 6 caregivers | Free AI via Groq
 
