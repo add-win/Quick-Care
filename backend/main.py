@@ -75,6 +75,10 @@ class AlarmEvent(BaseModel):
     value: float; threshold: float
     ts: str = Field(default_factory=lambda: datetime.now().isoformat())
     acked: bool = False; ack_by: Optional[str] = None
+    primary_cg_id: Optional[str] = None; secondary_cg_id: Optional[str] = None; tertiary_cg_id: Optional[str] = None
+    primary_cg_name: Optional[str] = None; secondary_cg_name: Optional[str] = None; tertiary_cg_name: Optional[str] = None
+    primary_acked: bool = False; secondary_acked: bool = False; tertiary_acked: bool = False
+    primary_ack_time: Optional[str] = None; secondary_ack_time: Optional[str] = None; tertiary_ack_time: Optional[str] = None
 
 class AssignRequest(BaseModel):
     patient_id: str; alarm_type: str; severity: str
@@ -84,7 +88,7 @@ class AssignRequest(BaseModel):
 # ══════════════════════════════════════════════════════════════════════════════
 
 STORE: Dict = {"patients": {}, "caregivers": {}, "alarms": [], "assignments": [], "alarm_stats": {"total": 0, "critical": 0, "acked": 0}}
-WS_CLIENTS: List[WebSocket] = []
+WS_CLIENTS: Dict = {}  # Format: {ws: {"caretaker_email": str, "caretaker_id": str}}
 
 # ─── Seed ────────────────────────────────────────────────────────────────────
 _NAMES = ["Mary Smith","John Jones","Alice Brown","Bob Davis","Carol Wilson","David Moore",
@@ -96,15 +100,18 @@ _NAMES = ["Mary Smith","John Jones","Alice Brown","Bob Davis","Carol Wilson","Da
           "Iris Thomas","Jake Jackson","Kira White","Louis Harris"]
 
 _CG_RAW = [
-    {"name":"Maria John",  "role":"senior_nurse","floor":1,"skills":["cardiac","dementia"]},
-    {"name":"James Lee",   "role":"nurse",       "floor":1,"skills":["diabetes","mobility"]},
-    {"name":"Priya Mehta", "role":"caregiver",   "floor":2,"skills":["respiratory"]},
-    {"name":"Tom Walsh",   "role":"caregiver",   "floor":2,"skills":["mobility","fall"]},
-    {"name":"Lisa Chen",   "role":"nurse",       "floor":3,"skills":["cardiac","respiratory"]},
-    {"name":"Sam Okafor",  "role":"caregiver",   "floor":3,"skills":["dementia","wandering"]},
+    {"name":"Maria John",  "email":"maria@gmail.com", "role":"senior_nurse","floor":1,"skills":["cardiac","dementia"]},
+    {"name":"James Lee",   "email":"james@gmail.com", "role":"nurse",       "floor":1,"skills":["diabetes","mobility"]},
+    {"name":"Priya Mehta", "email":"priya@gmail.com", "role":"caregiver",   "floor":2,"skills":["respiratory"]},
+    {"name":"Tom Walsh",   "email":"tom@gmail.com", "role":"caregiver",   "floor":2,"skills":["mobility","fall"]},
+    {"name":"Lisa Chen",   "email":"lisa@gmail.com", "role":"nurse",       "floor":3,"skills":["cardiac","respiratory"]},
+    {"name":"Sam Okafor",  "email":"sam@gmail.com", "role":"caregiver",   "floor":3,"skills":["dementia","wandering"]},
 ]
 
+CAREGIVER_EMAIL_MAP = {}  # Maps email to caregiver_id
+
 def _seed():
+    global CAREGIVER_EMAIL_MAP
     cg_ids = []
     for raw in _CG_RAW:
         c = Caregiver(name=raw["name"], role=raw["role"], floor=raw["floor"], skills=raw["skills"],
@@ -112,7 +119,9 @@ def _seed():
                       tasks=random.randint(1,5), daily_assignments=random.randint(2,7),
                       eta=random.randint(0,15),
                       status=random.choice([Status.AVAILABLE, Status.ATTENDING, Status.ON_ROUNDS]))
-        STORE["caregivers"][c.id] = c; cg_ids.append(c.id)
+        STORE["caregivers"][c.id] = c
+        CAREGIVER_EMAIL_MAP[raw["email"]] = c.id  # Map email to caregiver ID
+        cg_ids.append(c.id)
 
     diseases = list(Disease)
     for i, name in enumerate(_NAMES):
@@ -231,10 +240,85 @@ def _tick_vitals():
             # Deduplicate: skip if same patient+type alarm in last 3 min
             recent = [a for a in STORE["alarms"][-30:] if a.patient_id==p.id and a.type==alm.type]
             if not recent or (datetime.now()-datetime.fromisoformat(recent[-1].ts)).seconds > 180:
+                # Auto-assign to top 3 best caretakers
+                scores = [(_score(cg, p.floor, alm.type.value, alm.severity.value), cg) for cg in STORE["caregivers"].values()]
+                scores.sort(key=lambda x: x[0].get("score", 0), reverse=True)
+                top_3 = [s[1] for s in scores[:3]]
+                
+                if len(top_3) > 0: alm.primary_cg_id = top_3[0].id; alm.primary_cg_name = top_3[0].name
+                if len(top_3) > 1: alm.secondary_cg_id = top_3[1].id; alm.secondary_cg_name = top_3[1].name
+                if len(top_3) > 2: alm.tertiary_cg_id = top_3[2].id; alm.tertiary_cg_name = top_3[2].name
+                
                 STORE["alarms"].append(alm); STORE["alarm_stats"]["total"]+=1
                 if alm.severity==Severity.CRITICAL: STORE["alarm_stats"]["critical"]+=1
                 new_alarms.append(alm)
+                print(f"🚨 NEW ALARM: {alm.id} - {p.name} ({alm.type}) assigned to: {alm.primary_cg_name}/{alm.primary_cg_id}")
+    if new_alarms:
+        print(f"📤 Returning {len(new_alarms)} alarms from _tick_vitals")
     return new_alarms
+
+async def broadcast_alarms(new_alarms):
+    if not new_alarms or not WS_CLIENTS: return
+    print(f"📢 Broadcasting {len(new_alarms)} new alarms to {len(WS_CLIENTS)} clients")
+    dead=[]
+    for ws, client_info in list(WS_CLIENTS.items()):
+        try:
+            role = client_info.get("role")
+            if role == "admin":
+                msg = json.dumps({
+                    "type": "vitals_update",
+                    "new_alarms": [a.dict() for a in new_alarms],
+                    "ts": datetime.now().isoformat()
+                })
+                await ws.send_text(msg)
+                
+            for alm in new_alarms:
+                # Send ONLY to primary caretaker
+                cg_id = client_info.get("caretaker_id")
+                real_cg_id = CAREGIVER_EMAIL_MAP.get(cg_id, cg_id) if cg_id else None
+                if real_cg_id == alm.primary_cg_id:
+                    msg = json.dumps({
+                        "type": "caretaker_alert",
+                        "alarm": alm.dict(),
+                        "priority": "primary",
+                        "ts": datetime.now().isoformat()
+                    })
+                    await ws.send_text(msg)
+        except Exception as e:
+            print(f"   ! Error: {e}")
+            dead.append(ws)
+    for d in dead:
+        if d in WS_CLIENTS:
+            del WS_CLIENTS[d]
+
+async def broadcast_alarm_update(alm: AlarmEvent):
+    if not WS_CLIENTS: return
+    dead = []
+    for ws, client_info in list(WS_CLIENTS.items()):
+        try:
+            role = client_info.get("role")
+            if role == "admin":
+                # Send an alarm_update so admin UI updates the ack status
+                msg = json.dumps({
+                    "type": "alarm_update",
+                    "alarm": alm.dict(),
+                    "ts": datetime.now().isoformat()
+                })
+                await ws.send_text(msg)
+            else:
+                cg_id = client_info.get("caretaker_id")
+                real_cg_id = CAREGIVER_EMAIL_MAP.get(cg_id, cg_id) if cg_id else None
+                # If this caregiver is a backup and primary acked, cancel their alert!
+                if alm.acked and real_cg_id in [alm.secondary_cg_id, alm.tertiary_cg_id]:
+                    msg = json.dumps({
+                        "type": "cancel_alert",
+                        "alarm_id": alm.id
+                    })
+                    await ws.send_text(msg)
+        except Exception as e:
+            dead.append(ws)
+    for d in dead:
+        if d in WS_CLIENTS: del WS_CLIENTS[d]
 
 @app.on_event("startup")
 async def start_simulator():
@@ -242,14 +326,7 @@ async def start_simulator():
         while True:
             await asyncio.sleep(6)
             new_alarms = _tick_vitals()
-            if new_alarms and WS_CLIENTS:
-                msg = json.dumps({"type":"vitals_update","new_alarms":[a.dict() for a in new_alarms],
-                                   "ts":datetime.now().isoformat()})
-                dead=[]
-                for ws in WS_CLIENTS:
-                    try: await ws.send_text(msg)
-                    except: dead.append(ws)
-                for d in dead: WS_CLIENTS.remove(d)
+            await broadcast_alarms(new_alarms)
     asyncio.create_task(_loop())
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -304,8 +381,35 @@ def active_alarms():
 
 @app.post("/alarms/{aid}/ack")
 def ack_alarm(aid:str, cg_id:str=""):
+    real_cg_id = CAREGIVER_EMAIL_MAP.get(cg_id, cg_id)
     for a in STORE["alarms"]:
-        if a.id==aid: a.acked=True; a.ack_by=cg_id; STORE["alarm_stats"]["acked"]+=1; return {"ok":True}
+        if a.id==aid: a.acked=True; a.ack_by=real_cg_id; STORE["alarm_stats"]["acked"]+=1; return {"ok":True}
+    raise HTTPException(404)
+
+@app.post("/alarms/{aid}/caretaker-ack")
+async def caretaker_ack_alarm(aid:str, cg_id:str=""):
+    """Caretaker acknowledges receiving the alert"""
+    real_cg_id = CAREGIVER_EMAIL_MAP.get(cg_id, cg_id)
+    for a in STORE["alarms"]:
+        if a.id == aid:
+            is_primary = (a.primary_cg_id == real_cg_id)
+            if a.primary_cg_id == real_cg_id:
+                a.primary_acked = True
+                a.primary_ack_time = datetime.now().isoformat()
+            elif a.secondary_cg_id == real_cg_id:
+                a.secondary_acked = True
+                a.secondary_ack_time = datetime.now().isoformat()
+            elif a.tertiary_cg_id == real_cg_id:
+                a.tertiary_acked = True
+                a.tertiary_ack_time = datetime.now().isoformat()
+                
+            if is_primary and not a.acked:
+                a.acked = True
+                a.ack_by = real_cg_id
+                STORE["alarm_stats"]["acked"]+=1
+                await broadcast_alarm_update(a)
+                
+            return {"ok": True, "acknowledged": True}
     raise HTTPException(404)
 
 # ── AI Assignment ─────────────────────────────────────────────────────────────
@@ -317,17 +421,46 @@ def assign(req: AssignRequest):
     ranked = sorted([_score(c, p.floor, req.alarm_type, req.severity) for c in cgs],
                     key=lambda x:x["score"], reverse=True)
     explanation = _explain(ranked, p.name, p.floor, req.alarm_type, req.severity)
-    result = {"patient":p.name,"room":p.room,"alarm_type":req.alarm_type,"severity":req.severity,
+    result = {"patient_id": req.patient_id, "patient":p.name,"room":p.room,"alarm_type":req.alarm_type,"severity":req.severity,
               "primary":ranked[0],"secondary":ranked[1],"backup":ranked[2],
               "explanation":explanation,"all":ranked,"ts":datetime.now().isoformat()}
-    STORE["assignments"].append(result)
-    # Update caregiver
-    cid = ranked[0]["id"]
-    STORE["caregivers"][cid].daily_assignments += 1
-    STORE["caregivers"][cid].alarms += 1
-    STORE["caregivers"][cid].fairness = max(0, STORE["caregivers"][cid].fairness - 5)
-    STORE["caregivers"][cid].workload = min(100, STORE["caregivers"][cid].workload + 8)
     return result
+
+class ConfirmAssignRequest(BaseModel):
+    result: dict
+
+@app.post("/confirm_assignment")
+async def confirm_assignment(req: ConfirmAssignRequest):
+    r = req.result
+    # Create the AlarmEvent
+    alm = AlarmEvent(
+        patient_id=r["patient_id"], patient_name=r["patient"], room=r["room"], floor=1,
+        type=AlarmType(r["alarm_type"]), severity=Severity(r["severity"]),
+        value=0, threshold=0,
+        primary_cg_id=r["primary"]["id"], primary_cg_name=r["primary"]["name"],
+        secondary_cg_id=r["secondary"]["id"], secondary_cg_name=r["secondary"]["name"],
+        tertiary_cg_id=r["backup"]["id"], tertiary_cg_name=r["backup"]["name"]
+    )
+    p = STORE["patients"].get(r["patient_id"])
+    if p: alm.floor = p.floor
+    
+    STORE["alarms"].append(alm)
+    STORE["alarm_stats"]["total"] += 1
+    if alm.severity == Severity.CRITICAL: STORE["alarm_stats"]["critical"] += 1
+    
+    STORE["assignments"].append(r)
+    
+    # Update caregiver
+    cid = r["primary"]["id"]
+    if cid in STORE["caregivers"]:
+        STORE["caregivers"][cid].daily_assignments += 1
+        STORE["caregivers"][cid].alarms += 1
+        STORE["caregivers"][cid].fairness = max(0, STORE["caregivers"][cid].fairness - 5)
+        STORE["caregivers"][cid].workload = min(100, STORE["caregivers"][cid].workload + 8)
+    
+    # Broadcast immediately
+    await broadcast_alarms([alm])
+    return {"ok": True}
 
 @app.get("/assignments")
 def get_assignments(limit:int=20):
@@ -395,9 +528,26 @@ def shift_report():
 # ── WebSocket ─────────────────────────────────────────────────────────────────
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
-    await ws.accept(); WS_CLIENTS.append(ws)
-    await ws.send_text(json.dumps({"type":"init","message":"Connected to CareOptimize live feed"}))
+    # Extract caretaker info from query params
+    caretaker_id = ws.query_params.get("caretaker_id")
+    caretaker_email = ws.query_params.get("caretaker_email")
+    
+    await ws.accept()
+    # Map email to caregiver ID
+    mapped_cg_id = CAREGIVER_EMAIL_MAP.get(caretaker_email, caretaker_id)
+    print(f"🔌 WS Connection: caretaker_id={caretaker_id}, caretaker_email={caretaker_email}, mapped_cg_id={mapped_cg_id}")
+    print(f"   CAREGIVER_EMAIL_MAP keys: {list(CAREGIVER_EMAIL_MAP.keys())}")
+    WS_CLIENTS[ws] = {
+        "caretaker_id": mapped_cg_id,
+        "caretaker_email": caretaker_email,
+        "role": "caretaker" if caretaker_id else "admin"
+    }
+    print(f"   WS_CLIENTS now has {len(WS_CLIENTS)} clients")
+    await ws.send_text(json.dumps({"type":"init","message":"Connected to Quick-Care live feed"}))
     try:
-        while True: await ws.receive_text()
+        while True:
+            await ws.receive_text()
     except WebSocketDisconnect:
-        if ws in WS_CLIENTS: WS_CLIENTS.remove(ws)
+        if ws in WS_CLIENTS:
+            del WS_CLIENTS[ws]
+        print(f"   WS disconnected, now {len(WS_CLIENTS)} clients")

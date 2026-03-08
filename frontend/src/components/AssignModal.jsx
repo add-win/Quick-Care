@@ -201,7 +201,14 @@ export default function AssignModal({ alarm, onClose, onDone }) {
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
                 <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-                <Btn variant="success" onClick={() => { onDone && onDone(result); onClose(); }}
+                <Btn variant="success" onClick={async () => {
+                  try {
+                    await api.confirmAssign(result);
+                    if (onDone) onDone(result);
+                  } finally {
+                    onClose();
+                  }
+                }}
                   style={{ padding: "10px 24px", fontSize: 13 }}>
                   ✅ Confirm — Assign {result.primary?.name}
                 </Btn>

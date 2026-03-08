@@ -1,0 +1,108 @@
+/* src/index.css - Global Styles & Responsive Utilities */
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  /* Default Dark Mode */
+  --bg-main: #080b14;
+  --bg-header: #0a0d16;
+  --bg-card: #0e1220;
+  --bg-card-hover: #141929;
+  --border-color: #1a2035;
+  --border-highlight: #2d6abf;
+  --text-main: #dde4f0;
+  --text-muted: #5a6480;
+  --btn-ghost-bg: #1e4a8a20;
+  --input-bg: #0e1220;
+  --card-shadow: none;
+  --header-border: var(--border-color);
+  --header-text: var(--text-main);
+  --header-muted: var(--text-muted);
+  --header-hover: var(--btn-ghost-bg);
+}
+
+[data-theme="light"] {
+  --bg-main: #eef2f6;
+  --bg-header: #ffffff;          /* White sidebar/navbar */
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f5f9;
+  --border-color: #cbd5e1;
+  --border-highlight: #2563eb;
+  --text-main: #0f172a;
+  --text-muted: #475569;
+  --btn-ghost-bg: #e2e8f0;
+  --input-bg: #ffffff;
+  --card-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  --header-border: #e2e8f0;      /* Light soft border */
+  --header-text: #0f172a;        /* Dark text on light navbar */
+  --header-muted: #64748b;       /* Medium-gray muted text */
+  --header-hover: #f1f5f9;       /* Soft hover highlight */
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  transition: background-color 0.3s ease, color 0.3s ease;
+  zoom: 1.15;
+}
+
+/* Responsive Grid System */
+.grid-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.grid-2col {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.flex-responsive {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.grid-caretaker {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+}
+
+.flex-column-mobile {
+  display: flex;
+}
+
+@media (max-width: 768px) {
+  .grid-caretaker {
+    grid-template-columns: 1fr;
+  }
+
+  .flex-column-mobile {
+    flex-direction: column;
+  }
+
+  .hide-mobile {
+    display: none !important;
+  }
+
+  h1 {
+    font-size: 28px !important;
+  }
+
+  h2 {
+    font-size: 24px !important;
+  }
+
+  .card-container {
+    padding: 12px !important;
+  }
+}

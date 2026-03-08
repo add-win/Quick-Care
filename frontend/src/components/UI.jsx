@@ -4,10 +4,10 @@ import { RISK_COLOR, STATUS_COLOR, SEV_COLOR } from "../api";
 export function Card({ children, style = {}, glow }) {
   return (
     <div style={{
-      background: "#0e1220",
-      border: `1px solid ${glow ? glow + "40" : "#1a2035"}`,
+      background: "var(--bg-card)",
+      border: `1px solid ${glow ? glow + "40" : "var(--border-color)"}`,
       borderRadius: 16,
-      boxShadow: glow ? `0 0 24px ${glow}18` : "none",
+      boxShadow: glow ? `0 0 24px ${glow}18` : "var(--card-shadow)",
       ...style,
     }}>
       {children}
@@ -49,7 +49,7 @@ export function RiskBadge({ risk }) {
 export function WBar({ value, height = 8 }) {
   const color = value > 70 ? "#ff4757" : value > 45 ? "#ffa502" : "#2ed573";
   return (
-    <div style={{ background: "#141929", borderRadius: 99, height, overflow: "hidden" }}>
+    <div style={{ background: "var(--bg-card-hover)", borderRadius: 99, height, overflow: "hidden" }}>
       <div style={{
         width: `${Math.min(100, value)}%`, height: "100%", background: color,
         borderRadius: 99, transition: "width 0.6s ease",
@@ -66,7 +66,7 @@ export function StatCard({ icon, label, value, color = "#dde4f0", sub }) {
       <div style={{ fontSize: 30, fontWeight: 800, color, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
         {value}
       </div>
-      <div style={{ fontSize: 11, color: "#5a6480", marginTop: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>
+      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6, textTransform: "uppercase", letterSpacing: 0.8 }}>
         {label}
       </div>
       {sub && <div style={{ fontSize: 11, color: "#3d87d4", marginTop: 4 }}>{sub}</div>}
@@ -78,7 +78,7 @@ export function Spinner() {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: 60, gap: 16 }}>
       <div style={{
-        width: 36, height: 36, border: "3px solid #1a2540",
+        width: 36, height: 36, border: "3px solid var(--border-color)",
         borderTop: "3px solid #3d87d4", borderRadius: "50%",
         animation: "spin 0.8s linear infinite",
       }} />
@@ -91,7 +91,7 @@ export function Spinner() {
 export function SectionHeader({ title, action }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-      <h3 style={{ fontWeight: 700, fontSize: 15, color: "#dde4f0", letterSpacing: -0.2 }}>{title}</h3>
+      <h3 style={{ fontWeight: 700, fontSize: 15, color: "var(--text-main)", letterSpacing: -0.2 }}>{title}</h3>
       {action}
     </div>
   );
@@ -101,7 +101,7 @@ export function Btn({ children, onClick, variant = "primary", disabled, style = 
   const variants = {
     primary:  { background: "linear-gradient(135deg,#1e4a8a,#0d2855)", border: "1px solid #2d6abf50", color: "#54a0ff" },
     danger:   { background: "#ff47571a", border: "1px solid #ff475740", color: "#ff4757" },
-    ghost:    { background: "transparent", border: "1px solid #1a2540", color: "#5a6480" },
+    ghost:    { background: "transparent", border: "1px solid var(--border-color)", color: "var(--text-muted)" },
     success:  { background: "#2ed5731a", border: "1px solid #2ed57340", color: "#2ed573" },
   };
   return (

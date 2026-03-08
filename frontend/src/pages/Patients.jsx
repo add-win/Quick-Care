@@ -36,16 +36,16 @@ export default function Patients({ onAssign }) {
 
   return (
     <div>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
+      <div className="flex-column-mobile" style={{ justifyContent:"space-between", alignItems:"flex-start", gap: 12, marginBottom:18 }}>
         <div>
-          <h2 style={{ fontWeight:800, fontSize:20, color:"#dde4f0" }}>Patient Registry</h2>
-          <div style={{ fontSize:12, color:"#5a6480", marginTop:2 }}>{shown.length} of {patients.length} patients</div>
+          <h2 style={{ fontWeight:800, fontSize:20, color:"var(--text-main)", margin:0 }}>Patient Registry</h2>
+          <div style={{ fontSize:12, color:"var(--text-muted)", marginTop:2 }}>{shown.length} of {patients.length} patients</div>
         </div>
         <input
           value={search} onChange={e=>setSearch(e.target.value)}
           placeholder="Search name or room..."
           style={{
-            background:"#0e1220", border:"1px solid #1a2035", color:"#dde4f0",
+            background:"var(--input-bg)", border:"1px solid var(--border-color)", color:"var(--text-main)",
             borderRadius:10, padding:"8px 14px", fontSize:13, width:220,
             fontFamily:"inherit", outline:"none",
           }}
@@ -56,9 +56,9 @@ export default function Patients({ onAssign }) {
       <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:18 }}>
         {FILTERS.map(f => (
           <button key={f} onClick={() => setFilter(f)} style={{
-            background: filter===f ? "#1e4a8a" : "#0e1220",
-            border: `1px solid ${filter===f ? "#2d6abf" : "#1a2035"}`,
-            color: filter===f ? "#54a0ff" : "#5a6480",
+            background: filter===f ? "#1e4a8a" : "var(--bg-card)",
+            border: `1px solid ${filter===f ? "#2d6abf" : "var(--border-color)"}`,
+            color: filter===f ? "#54a0ff" : "var(--text-muted)",
             borderRadius: 20, padding: "4px 14px", cursor:"pointer",
             fontSize: 11, fontWeight:600, textTransform:"capitalize",
             fontFamily:"inherit", transition:"all 0.15s",
@@ -70,11 +70,11 @@ export default function Patients({ onAssign }) {
         <div style={{ overflowX:"auto" }}>
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead>
-              <tr style={{ background:"#080b14", borderBottom:"1px solid #1a2035" }}>
+              <tr style={{ background:"var(--bg-main)", borderBottom:"1px solid var(--border-color)" }}>
                 {["Patient","Age","Room / Floor","Disease","Intensity","Risk","Vitals","Caregiver","Action"].map(h => (
                   <th key={h} style={{
                     padding:"11px 14px", textAlign:"left",
-                    fontSize:10, color:"#5a6480", fontWeight:700,
+                    fontSize:10, color:"var(--text-muted)", fontWeight:700,
                     letterSpacing:0.8, textTransform:"uppercase",
                   }}>{h}</th>
                 ))}
@@ -85,26 +85,26 @@ export default function Patients({ onAssign }) {
                 const cg = care[p.caregiver_id];
                 return (
                   <tr key={p.id} style={{
-                    borderBottom:"1px solid #0f1525",
-                    background: i%2===0 ? "transparent" : "#0a0e18",
+                    borderBottom:"1px solid var(--border-color)",
+                    background: i%2===0 ? "transparent" : "var(--bg-card-hover)",
                     transition:"background 0.1s",
                   }}>
                     <td style={{ padding:"11px 14px" }}>
-                      <div style={{ fontWeight:700, fontSize:13, color:"#dde4f0" }}>{p.name}</div>
+                      <div style={{ fontWeight:700, fontSize:13, color:"var(--text-main)" }}>{p.name}</div>
                     </td>
-                    <td style={{ padding:"11px 14px", fontSize:13, color:"#8892aa" }}>{p.age}</td>
-                    <td style={{ padding:"11px 14px", fontSize:13, color:"#8892aa" }}>
+                    <td style={{ padding:"11px 14px", fontSize:13, color:"var(--text-muted)" }}>{p.age}</td>
+                    <td style={{ padding:"11px 14px", fontSize:13, color:"var(--text-muted)" }}>
                       Rm {p.room} · F{p.floor}
                     </td>
                     <td style={{ padding:"11px 14px" }}>
-                      <span style={{ fontSize:13, textTransform:"capitalize", color:"#8892aa" }}>
+                      <span style={{ fontSize:13, textTransform:"capitalize", color:"var(--text-muted)" }}>
                         {DISEASE_ICON[p.disease]} {p.disease}
                       </span>
                     </td>
                     <td style={{ padding:"11px 14px", minWidth:100 }}>
                       <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                         <div style={{ flex:1 }}><WBar value={p.intensity*10} height={5} /></div>
-                        <span style={{ fontSize:11, color:"#5a6480", whiteSpace:"nowrap" }}>{p.intensity}/10</span>
+                        <span style={{ fontSize:11, color:"var(--text-muted)", whiteSpace:"nowrap" }}>{p.intensity}/10</span>
                       </div>
                     </td>
                     <td style={{ padding:"11px 14px" }}>
@@ -117,7 +117,7 @@ export default function Patients({ onAssign }) {
                       </div>
                     </td>
                     <td style={{ padding:"11px 14px" }}>
-                      <div style={{ fontSize:11, color:"#5a6480", fontFamily:"'DM Mono',monospace" }}>
+                      <div style={{ fontSize:11, color:"var(--text-muted)", fontFamily:"'DM Mono',monospace" }}>
                         ❤️ {p.vitals?.heart_rate?.toFixed(0)}
                         <span style={{ display:"block" }}>O₂ {p.vitals?.spo2?.toFixed(1)}%</span>
                       </div>
