@@ -148,7 +148,7 @@ export default function Analytics() {
 
       {/* Fairness bars */}
       <Card style={{ padding:22, marginBottom:18 }}>
-        <SectionHeader title="⚖️ Fairness & Stress Index" />
+        <SectionHeader title="⚖️ Fairness Index" />
         <div className="grid-2col" style={{ gap:20 }}>
           {workload.map((c,i) => (
             <div key={c.name}>
